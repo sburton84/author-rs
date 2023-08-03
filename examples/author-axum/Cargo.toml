@@ -1,0 +1,15 @@
+[package]
+name = "author-axum-example"
+version = "0.1.0"
+authors = ["Sean Burton <seanjburton@gmail.com>"]
+edition = "2021"
+
+[features]
+
+[dependencies]
+anyhow = "1"
+axum = "0.6"
+author-axum = { path = "../../author-axum" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"

@@ -1,0 +1,9 @@
+[package]
+name = "author"
+version = "0.1.0"
+authors = ["Sean Burton <seanjburton@gmail.com>"]
+edition = "2021"
+
+[features]
+
+[dependencies]
