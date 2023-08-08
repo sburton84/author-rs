@@ -9,6 +9,6 @@ edition = "2021"
 [dependencies]
 author-web = { path = "../author-web" }
 axum = "0.6"
-axum-extra = "0.7"
+axum-extra = { version = "0.7", features = ["cookie-private"] }
 tower-layer = "0.3"
 tower-service = "0.3"

@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
         "/admin",
         Router::new()
             .route("/", get(protected))
-            .layer(Extension(SessionManagerLayer::new())),
+            .layer(SessionManagerLayer::new()),
     );
 
     // Run our app

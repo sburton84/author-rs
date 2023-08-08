@@ -4,9 +4,9 @@ pub struct Session {
     uuid: Uuid,
 }
 
-pub trait SessionStore {
-    fn create_session() -> Session;
-    fn load_session(uuid: Uuid) -> Session;
+pub trait SessionStore: Send + Sync {
+    fn create_session(&self) -> Session;
+    fn load_session(&self, uuid: Uuid) -> Session;
 }
 
 pub struct SessionConfig {
