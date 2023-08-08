@@ -4,5 +4,6 @@ resolver = "2"
 members = [
     "author",
     "author-axum",
+    "author-web",
     "examples/author-axum",
 ]

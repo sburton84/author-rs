@@ -1,6 +1,8 @@
+use author_axum::SessionManagerLayer;
+use axum::debug_handler;
 use axum::routing::get;
 use axum::{Extension, Router};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use tracing::debug;
 
 #[tokio::main]
@@ -16,19 +18,23 @@ async fn main() -> anyhow::Result<()> {
         "/admin",
         Router::new()
             .route("/", get(protected))
-            .layer(Extension(auth)),
+            .layer(Extension(SessionManagerLayer::new())),
     );
 
     // Run our app
-    let addr = SocketAddr::from(("127.0.0.1", 3000));
+    let addr = SocketAddr::from(("127.0.0.1".parse::<Ipv4Addr>()?, 3000));
     debug!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
+
+    Ok(())
 }
 
-fn unprotected() {}
+#[debug_handler]
+async fn unprotected() {}
 
-#[Protect(Resource, Read)]
-fn protected() {}
+// #[Protect(Resource, Read)]
+#[debug_handler]
+async fn protected() {}

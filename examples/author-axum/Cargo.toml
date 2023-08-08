@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-axum = "0.6"
+axum = { version = "0.6", features = ["macros"] }
 author-axum = { path = "../../author-axum" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
