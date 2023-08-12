@@ -1,30 +1,27 @@
-use author_web::Session as AuthorSession;
 use author_web::SessionStore;
+use author_web::{Session as AuthorSession, SessionError};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::http::StatusCode;
-use axum::response::Response;
-use axum::{async_trait, Extension, RequestPartsExt};
+use axum::http::{Request, StatusCode};
+use axum::response::{IntoResponse, Response};
+use axum::{async_trait, RequestPartsExt};
+use axum_extra::extract::cookie::{Cookie, Key, SameSite};
 use axum_extra::extract::PrivateCookieJar;
+use futures::future::BoxFuture;
 use std::convert::Infallible;
-use std::future::Future;
+use std::str::FromStr;
 use std::task::{Context, Poll};
+use thiserror::Error;
 use tower_layer::Layer;
 use tower_service::Service;
+use tower_util::ServiceExt;
+use tracing::error;
+use uuid::Uuid;
 
-pub struct Session(AuthorSession);
+pub use author_web::SessionConfig;
 
-struct SessionConfig {
-    cookie_name: String,
-}
-
-impl Default for SessionConfig {
-    fn default() -> Self {
-        SessionConfig {
-            cookie_name: "author_session_cookie".to_string(),
-        }
-    }
-}
+#[derive(Clone)]
+pub struct Session(pub AuthorSession);
 
 #[async_trait]
 impl<S> FromRequestParts<S> for Session
@@ -33,62 +30,108 @@ where
 {
     type Rejection = (StatusCode, &'static str);
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let cookie = {
-            let cookie_jar = PrivateCookieJar::from_request_parts(parts, state)
-                .await
-                .ok();
-
-            let config = parts
-                .extensions
-                .get::<SessionConfig>()
-                .unwrap_or(&SessionConfig::default());
-
-            cookie_jar.map(|j| j.get(&config.cookie_name))
-        };
-
-        let session_store = parts.extensions.get::<Box<dyn SessionStore>>();
-        // .await
-        // .map_err(|err| err.into_response())?;
-
-        let session = match cookie {
-            Some(c) => {
-                let id = c.value();
-            }
-            None => {}
-        };
-
-        Ok(session)
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<Session>()
+            .cloned()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"))
     }
 }
 
+#[derive(Clone)]
 pub struct SessionManagerService<S> {
     inner: S,
+    config: SessionConfig,
 }
 
-impl<S, Request> Service<Request> for SessionManagerService<S>
+impl<S> SessionManagerService<S> {
+    pub fn new(inner: S, config: SessionConfig) -> Self {
+        SessionManagerService {
+            inner,
+            config: config.into(),
+        }
+    }
+}
+
+impl<S, B> Service<Request<B>> for SessionManagerService<S>
 where
-    S: Service<Request>,
+    S: Service<Request<B>, Response = Response, Error = Infallible> + Clone + Send + 'static,
+    S::Response: IntoResponse,
+    S::Future: Send,
+    B: Send + 'static,
 {
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
+    // type Response = Result<(PrivateCookieJar, S::Response), AxumSessionError<S::Error>>;
+    // type Error = Infallible;
+    // type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+    type Response = (PrivateCookieJar, S::Response);
+    type Error = Infallible;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
-        self.inner.call(req)
+    fn call(&mut self, req: Request<B>) -> Self::Future {
+        let config = self.config.clone();
+
+        let clone = self.inner.clone();
+        let inner = std::mem::replace(&mut self.inner, clone);
+
+        Box::pin(async move {
+            let (mut parts, body) = req.into_parts();
+
+            let mut cookie_jar = parts
+                .extract_with_state::<PrivateCookieJar, Key>(&config.key)
+                .await
+                .unwrap();
+
+            let cookie = cookie_jar.get(&config.cookie_name);
+
+            let session_store = parts.extensions.get::<Box<dyn SessionStore>>().unwrap();
+
+            let session = match cookie {
+                Some(c) => {
+                    let uuid = Uuid::from_str(c.value()).unwrap();
+                    // TODO: Refresh the session cookie with a new UUID
+                    Session(session_store.load_session(uuid))
+                }
+                None => {
+                    let session = AuthorSession::new();
+                    session_store.store_session(&session);
+
+                    let cookie =
+                        Cookie::build(config.cookie_name.to_string(), session.uuid.to_string())
+                            .same_site(SameSite::Strict)
+                            .secure(true)
+                            .http_only(true)
+                            .finish();
+
+                    cookie_jar = cookie_jar.add(cookie);
+
+                    Session(session)
+                }
+            };
+
+            parts.extensions.insert(session);
+
+            let response = inner.oneshot(Request::from_parts(parts, body)).await?;
+
+            Ok((cookie_jar, response))
+        })
     }
 }
 
 #[derive(Clone)]
-pub struct SessionManagerLayer {}
+pub struct SessionManagerLayer {
+    config: SessionConfig,
+}
 
 impl SessionManagerLayer {
-    pub fn new() -> Self {
-        SessionManagerLayer {}
+    pub fn new(config: SessionConfig) -> Self {
+        SessionManagerLayer {
+            config: config.into(),
+        }
     }
 }
 
@@ -96,6 +139,35 @@ impl<S> Layer<S> for SessionManagerLayer {
     type Service = SessionManagerService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        SessionManagerService { inner }
+        SessionManagerService::new(inner, self.config.clone())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum AxumSessionError<E>
+where
+    E: IntoResponse,
+{
+    #[error("Error from inner service: {0}")]
+    InnerServiceError(E),
+    #[error("Unexpected session error: {0}")]
+    SessionError(#[from] SessionError),
+    #[error("Session store not found")]
+    SessionStoreNotFound,
+    #[error("Session config not found")]
+    SessionConfigNotFound,
+    #[error("UUID error: {0}")]
+    UuidError(#[from] uuid::Error),
+}
+
+impl<E> IntoResponse for AxumSessionError<E>
+where
+    E: IntoResponse,
+{
+    fn into_response(self) -> Response {
+        match self {
+            AxumSessionError::InnerServiceError(inner) => inner.into_response(),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
+        }
     }
 }

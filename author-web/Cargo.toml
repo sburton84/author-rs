@@ -7,5 +7,9 @@ edition = "2021"
 [features]
 
 [dependencies]
+anyhow = "1"
 author = { path = "../author" }
-uuid = "1"
+cookie = "0.17"
+rand = "0.8"
+thiserror = "1"
+uuid = { version = "1", features = ["v4"] }

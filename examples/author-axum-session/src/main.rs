@@ -1,7 +1,7 @@
-use author_axum::SessionManagerLayer;
+use author_axum::{Session, SessionConfig, SessionManagerLayer};
 use axum::debug_handler;
 use axum::routing::get;
-use axum::{Extension, Router};
+use axum::Router;
 use std::net::{Ipv4Addr, SocketAddr};
 use tracing::debug;
 
@@ -10,15 +10,18 @@ async fn main() -> anyhow::Result<()> {
     // Initialise tracing
     tracing_subscriber::fmt::init();
 
+    // Create the session config
+    let session_config = SessionConfig::default();
+
     // Build our application
-    let app = Router::new().route("/", get(unprotected));
+    let app = Router::new().route("/", get(no_session_handler));
 
     // Add protected admin routes
     let app = app.nest(
         "/admin",
         Router::new()
-            .route("/", get(protected))
-            .layer(SessionManagerLayer::new()),
+            .route("/", get(session_handler))
+            .layer(SessionManagerLayer::new(session_config)),
     );
 
     // Run our app
@@ -33,8 +36,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[debug_handler]
-async fn unprotected() {}
+async fn no_session_handler() -> String {
+    "Hello world".to_string()
+}
 
 // #[Protect(Resource, Read)]
 #[debug_handler]
-async fn protected() {}
+async fn session_handler(session: Session) -> String {
+    format!("Session found with ID {}", session.0.uuid.to_string())
+}

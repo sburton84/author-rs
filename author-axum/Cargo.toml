@@ -10,5 +10,12 @@ edition = "2021"
 author-web = { path = "../author-web" }
 axum = "0.6"
 axum-extra = { version = "0.7", features = ["cookie-private"] }
+futures = "0.3"
+thiserror = "1"
+tracing = "0.1"
+tower = "0.4"
 tower-layer = "0.3"
 tower-service = "0.3"
+tower-util = "0.3"
+uuid = "1"
+

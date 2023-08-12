@@ -5,5 +5,5 @@ members = [
     "author",
     "author-axum",
     "author-web",
-    "examples/author-axum",
+    "examples/author-axum-session",
 ]
