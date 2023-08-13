@@ -1,8 +1,13 @@
 [package]
 name = "author-web"
 version = "0.1.0"
+description = "Common code for Author web integrations"
 authors = ["Sean Burton <seanjburton@gmail.com>"]
+repository = "https://github.com/sburton84/author-rs"
+license = "MIT"
 edition = "2021"
+readme = "README.md"
+homepage = "https://github.com/sburton84/author-rs"
 
 [features]
 
