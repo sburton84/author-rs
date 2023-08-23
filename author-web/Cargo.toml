@@ -15,6 +15,7 @@ homepage = "https://github.com/sburton84/author-rs"
 anyhow = "1"
 author = { path = "../author" }
 cookie = "0.17"
+parking_lot = "0.12"
 rand = "0.8"
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }

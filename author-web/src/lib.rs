@@ -1,24 +1,16 @@
 use cookie::Key;
 use std::sync::Arc;
 use thiserror::Error;
-use uuid::Uuid;
+
+pub mod store;
 
 #[derive(Clone)]
-pub struct Session {
-    pub uuid: Uuid,
-}
+pub struct Session {}
 
 impl Session {
     pub fn new() -> Self {
-        Session {
-            uuid: Uuid::new_v4(),
-        }
+        Session {}
     }
-}
-
-pub trait SessionStore: Send + Sync {
-    fn store_session(&self, session: &Session);
-    fn load_session(&self, uuid: Uuid) -> Session;
 }
 
 #[derive(Clone)]

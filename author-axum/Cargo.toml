@@ -16,6 +16,7 @@ author-web = { path = "../author-web" }
 axum = "0.6"
 axum-extra = { version = "0.7", features = ["cookie-private"] }
 futures = "0.3"
+parking_lot = "0.12"
 thiserror = "1"
 tracing = "0.1"
 tower = "0.4"

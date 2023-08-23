@@ -1,4 +1,4 @@
-use author_web::SessionStore;
+use author_web::store::SessionStore;
 use author_web::{Session as AuthorSession, SessionError};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -8,8 +8,10 @@ use axum::{async_trait, RequestPartsExt};
 use axum_extra::extract::cookie::{Cookie, Key, SameSite};
 use axum_extra::extract::PrivateCookieJar;
 use futures::future::BoxFuture;
+use parking_lot::Mutex;
 use std::convert::Infallible;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use thiserror::Error;
 use tower_layer::Layer;
@@ -18,6 +20,7 @@ use tower_util::ServiceExt;
 use tracing::error;
 use uuid::Uuid;
 
+pub use author_web::store;
 pub use author_web::SessionConfig;
 
 #[derive(Clone)]
@@ -35,7 +38,7 @@ where
             .extensions
             .get::<Session>()
             .cloned()
-            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"))
+            .ok_or((StatusCode::FORBIDDEN, "Forbidden"))
     }
 }
 
@@ -43,28 +46,30 @@ where
 pub struct SessionManagerService<S> {
     inner: S,
     config: SessionConfig,
+    store: Arc<Mutex<dyn SessionStore>>,
 }
 
 impl<S> SessionManagerService<S> {
-    pub fn new(inner: S, config: SessionConfig) -> Self {
+    pub fn new(inner: S, config: SessionConfig, store: Arc<Mutex<dyn SessionStore>>) -> Self {
         SessionManagerService {
             inner,
             config: config.into(),
+            store,
         }
     }
 }
 
-impl<S, B> Service<Request<B>> for SessionManagerService<S>
+impl<S, B, ResBody> Service<Request<B>> for SessionManagerService<S>
 where
-    S: Service<Request<B>, Response = Response, Error = Infallible> + Clone + Send + 'static,
+    S: Service<Request<B>, Response = Response<ResBody>, Error = Infallible>
+        + Clone
+        + Send
+        + 'static,
     S::Response: IntoResponse,
     S::Future: Send,
     B: Send + 'static,
 {
-    // type Response = Result<(PrivateCookieJar, S::Response), AxumSessionError<S::Error>>;
-    // type Error = Infallible;
-    // type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-    type Response = (PrivateCookieJar, S::Response);
+    type Response = (Option<PrivateCookieJar>, Result<S::Response, StatusCode>);
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -74,6 +79,7 @@ where
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let config = self.config.clone();
+        let mut store = self.store.clone();
 
         let clone = self.inner.clone();
         let inner = std::mem::replace(&mut self.inner, clone);
@@ -81,31 +87,50 @@ where
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
 
-            let mut cookie_jar = parts
+            let mut cookie_jar = match parts
                 .extract_with_state::<PrivateCookieJar, Key>(&config.key)
                 .await
-                .unwrap();
+            {
+                Err(e) => {
+                    error!("Failed to extract session cookie: {}", e);
+                    return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
+                }
+                Ok(j) => j,
+            };
 
             let cookie = cookie_jar.get(&config.cookie_name);
 
-            let session_store = parts.extensions.get::<Box<dyn SessionStore>>().unwrap();
-
             let session = match cookie {
                 Some(c) => {
-                    let uuid = Uuid::from_str(c.value()).unwrap();
+                    let uuid = match Uuid::from_str(c.value()) {
+                        Err(e) => {
+                            error!("Invalid UUID in session cookie: {}", e);
+                            return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
+                        }
+                        Ok(u) => u,
+                    };
+
                     // TODO: Refresh the session cookie with a new UUID
-                    Session(session_store.load_session(uuid))
+
+                    let session = match store.load_session(&uuid) {
+                        None => {
+                            error!("Session with key {} not found", uuid);
+                            return Ok((None, Err(StatusCode::FORBIDDEN)));
+                        }
+                        Some(s) => s,
+                    };
+
+                    Session(session)
                 }
                 None => {
                     let session = AuthorSession::new();
-                    session_store.store_session(&session);
+                    let uuid = store.store_session(&session);
 
-                    let cookie =
-                        Cookie::build(config.cookie_name.to_string(), session.uuid.to_string())
-                            .same_site(SameSite::Strict)
-                            .secure(true)
-                            .http_only(true)
-                            .finish();
+                    let cookie = Cookie::build(config.cookie_name.to_string(), uuid.to_string())
+                        .same_site(SameSite::Strict)
+                        .secure(true)
+                        .http_only(true)
+                        .finish();
 
                     cookie_jar = cookie_jar.add(cookie);
 
@@ -117,7 +142,7 @@ where
 
             let response = inner.oneshot(Request::from_parts(parts, body)).await?;
 
-            Ok((cookie_jar, response))
+            Ok((Some(cookie_jar), Ok(response)))
         })
     }
 }
@@ -125,13 +150,12 @@ where
 #[derive(Clone)]
 pub struct SessionManagerLayer {
     config: SessionConfig,
+    store: Arc<Mutex<dyn SessionStore>>,
 }
 
 impl SessionManagerLayer {
-    pub fn new(config: SessionConfig) -> Self {
-        SessionManagerLayer {
-            config: config.into(),
-        }
+    pub fn new(config: SessionConfig, store: Arc<Mutex<dyn SessionStore>>) -> Self {
+        SessionManagerLayer { config, store }
     }
 }
 
@@ -139,7 +163,7 @@ impl<S> Layer<S> for SessionManagerLayer {
     type Service = SessionManagerService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        SessionManagerService::new(inner, self.config.clone())
+        SessionManagerService::new(inner, self.config.clone(), self.store.clone())
     }
 }
 
