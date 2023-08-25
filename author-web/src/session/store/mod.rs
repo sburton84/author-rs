@@ -9,7 +9,7 @@ pub trait SessionStore: Send {
     type Session: SessionData;
     type Key: SessionKey;
 
-    fn store_session(&mut self, session: &Self::Session) -> Self::Key;
+    fn create_session(&mut self) -> (Self::Key, Self::Session);
     fn load_session(&self, key: &Self::Key) -> Option<Self::Session>;
 }
 
@@ -21,8 +21,8 @@ where
     type Session = S;
     type Key = K;
 
-    fn store_session(&mut self, session: &S) -> K {
-        self.lock().store_session(session)
+    fn create_session(&mut self) -> (Self::Key, Self::Session) {
+        self.lock().create_session()
     }
 
     fn load_session(&self, key: &K) -> Option<S> {
@@ -39,8 +39,8 @@ where
     type Session = S;
     type Key = K;
 
-    fn store_session(&mut self, session: &S) -> K {
-        self.lock().store_session(session)
+    fn create_session(&mut self) -> (Self::Key, Self::Session) {
+        self.lock().create_session()
     }
 
     fn load_session(&self, key: &K) -> Option<S> {

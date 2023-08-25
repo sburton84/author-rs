@@ -1,5 +1,8 @@
 use author_axum::{Session, SessionManagerLayer};
-use author_web::session::store::in_memory::{InMemorySession, InMemorySessionStore};
+use author_web::session::store::in_memory::{
+    InMemorySession, InMemorySessionData, InMemorySessionStore,
+};
+use author_web::session::SessionDataValues;
 use author_web::SessionConfig;
 use axum::debug_handler;
 use axum::routing::get;
@@ -16,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     // Create the session config
     let session_config = SessionConfig::default();
 
-    let session_store = InMemorySessionStore::<InMemorySession, Uuid>::new();
+    let session_store = InMemorySessionStore::<InMemorySessionData, Uuid>::new();
 
     // Build our application
     let app = Router::new().route("/", get(no_session_handler));
@@ -49,7 +52,7 @@ async fn no_session_handler() -> String {
 async fn session_handler(Session(mut session): Session<InMemorySession>) -> String {
     let value = { session.get_value("test_key").clone() };
 
-    session.set_value("test_key", "test_value");
+    session.set_value("test_key".to_string(), "test_value".to_string());
 
     format!("Session found with value: {:?}", value)
 }

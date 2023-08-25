@@ -1,4 +1,8 @@
+use parking_lot::Mutex;
+use std::borrow::Borrow;
+use std::hash::Hash;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub mod store;
 
@@ -12,4 +16,42 @@ pub trait SessionData: Send + Sync {
 
 pub trait SessionSubject<Subject> {
     fn subject() -> Subject;
+}
+
+impl<S> SessionData for Arc<Mutex<S>>
+where
+    S: SessionData,
+{
+    fn new() -> Self {
+        Arc::new(Mutex::new(S::new()))
+    }
+}
+
+pub trait SessionDataValues<K, V>
+where
+    K: Hash + Eq,
+{
+    fn set_value(&mut self, key: K, val: V);
+    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+    where
+        KRef: Hash + Eq + ?Sized,
+        K: Borrow<KRef> + Hash + Eq;
+}
+
+impl<K, V, T> SessionDataValues<K, V> for Arc<Mutex<T>>
+where
+    K: Hash + Eq,
+    T: SessionDataValues<K, V>,
+{
+    fn set_value(&mut self, key: K, val: V) {
+        self.lock().set_value(key, val)
+    }
+
+    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+    where
+        KRef: Hash + Eq + ?Sized,
+        K: Borrow<KRef> + Hash + Eq,
+    {
+        self.lock().get_value(key)
+    }
 }

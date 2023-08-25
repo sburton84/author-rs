@@ -1,11 +1,14 @@
 use crate::session::store::SessionStore;
-use crate::session::{SessionData, SessionKey};
+use crate::session::{SessionData, SessionDataValues, SessionKey};
+use parking_lot::Mutex;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 use uuid::Uuid;
 
-pub struct InMemorySessionStore<S = InMemorySession, K = Uuid> {
-    sessions: HashMap<K, S>,
+pub struct InMemorySessionStore<S = InMemorySessionData<String, String>, K = Uuid> {
+    sessions: HashMap<K, Arc<Mutex<S>>>,
 }
 
 impl<S, K> InMemorySessionStore<S, K> {
@@ -21,50 +24,68 @@ where
     S: SessionData + Clone + Send + Sync,
     K: SessionKey + Clone + Eq + Hash + Send + Sync,
 {
-    type Session = S;
+    type Session = Arc<Mutex<S>>;
     type Key = K;
 
-    fn store_session(&mut self, session: &S) -> K {
+    fn create_session(&mut self) -> (Self::Key, Self::Session) {
         let key = K::generate();
+        let session = Arc::new(Mutex::new(S::new()));
+
         self.sessions.insert(key.clone(), session.clone());
 
-        key
+        (key, session)
     }
 
-    fn load_session(&self, key: &K) -> Option<S> {
+    fn load_session(&self, key: &K) -> Option<Self::Session> {
         self.sessions.get(key).cloned()
     }
 }
 
+pub type InMemorySession<K = String, V = String> = Arc<Mutex<InMemorySessionData<K, V>>>;
+
 #[derive(Clone)]
-pub struct InMemorySession {
-    values: HashMap<String, String>,
+pub struct InMemorySessionData<K = String, V = String> {
+    values: HashMap<K, V>,
 }
 
-impl InMemorySession {
+impl<K, V> InMemorySessionData<K, V> {
     pub fn new() -> Self {
-        InMemorySession {
+        InMemorySessionData {
             values: HashMap::new(),
         }
     }
-
-    pub fn set_value(&mut self, key: &str, val: &str) {
-        self.values.insert(key.to_string(), val.to_string());
-    }
-
-    pub fn get_value(&self, key: &str) -> Option<String> {
-        self.values.get(key).cloned()
-    }
 }
 
-impl SessionData for InMemorySession {
+impl<K, V> SessionData for InMemorySessionData<K, V>
+where
+    K: Send + Sync,
+    V: Send + Sync,
+{
     fn new() -> Self {
-        InMemorySession::new()
+        InMemorySessionData::new()
     }
 }
 
 impl SessionKey for Uuid {
     fn generate() -> Self {
         Uuid::new_v4()
+    }
+}
+
+impl<K, V> SessionDataValues<K, V> for InMemorySessionData<K, V>
+where
+    K: Hash + Eq,
+    V: Clone,
+{
+    fn set_value(&mut self, key: K, val: V) {
+        self.values.insert(key, val);
+    }
+
+    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+    where
+        KRef: Hash + Eq + ?Sized,
+        K: Borrow<KRef>,
+    {
+        self.values.get(key).cloned()
     }
 }

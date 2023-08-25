@@ -1,4 +1,4 @@
-use author_web::session::store::in_memory::InMemorySession;
+use author_web::session::store::in_memory::InMemorySessionData;
 use author_web::session::store::SessionStore;
 use author_web::session::{SessionData, SessionKey};
 use author_web::{SessionConfig, SessionError};
@@ -22,7 +22,7 @@ use tower_util::ServiceExt;
 use tracing::{debug, error, trace};
 
 #[derive(Clone)]
-pub struct Session<T: Clone = InMemorySession>(pub T);
+pub struct Session<T: Clone = InMemorySessionData>(pub T);
 
 #[async_trait]
 impl<S, T> FromRequestParts<S> for Session<T>
@@ -157,8 +157,7 @@ where
                 None => {
                     debug!("No session cookie found, creating new session");
 
-                    let session = S::new();
-                    let session_key = store.store_session(&session);
+                    let (session_key, session) = store.create_session();
 
                     trace!("Session created with key {}", session_key);
 
@@ -175,7 +174,11 @@ where
                 }
             };
 
+            trace!("Adding session to extensions");
+
             parts.extensions.insert(session);
+
+            trace!("Processing inner service");
 
             let response = inner.oneshot(Request::from_parts(parts, body)).await?;
 
@@ -254,6 +257,9 @@ where
     fn into_response(self) -> Response {
         match self {
             AxumSessionError::InnerServiceError(inner) => inner.into_response(),
+            AxumSessionError::SessionError(SessionError::SessionNotFound) => {
+                (StatusCode::FORBIDDEN, "Forbidden").into_response()
+            }
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
         }
     }
