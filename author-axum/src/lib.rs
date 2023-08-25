@@ -1,5 +1,5 @@
-use author_web::store::SessionStore;
-use author_web::{Session as AuthorSession, SessionError};
+use author_web::store::{SessionKey, SessionStore};
+use author_web::{InMemorySession, SessionConfig, SessionData, SessionError};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
@@ -10,47 +10,49 @@ use axum_extra::extract::PrivateCookieJar;
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use std::convert::Infallible;
-use std::str::FromStr;
+use std::fmt::Display;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use thiserror::Error;
 use tower_layer::Layer;
 use tower_service::Service;
 use tower_util::ServiceExt;
-use tracing::error;
-use uuid::Uuid;
-
-pub use author_web::store;
-pub use author_web::SessionConfig;
+use tracing::{debug, error, trace};
 
 #[derive(Clone)]
-pub struct Session(pub AuthorSession);
+pub struct Session<T: Clone = InMemorySession>(pub T);
 
 #[async_trait]
-impl<S> FromRequestParts<S> for Session
+impl<S, T> FromRequestParts<S> for Session<T>
 where
     S: Send + Sync,
+    T: Clone + Send + Sync + 'static,
 {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts
             .extensions
-            .get::<Session>()
+            .get::<Session<T>>()
             .cloned()
             .ok_or((StatusCode::FORBIDDEN, "Forbidden"))
     }
 }
 
-#[derive(Clone)]
-pub struct SessionManagerService<S> {
-    inner: S,
+pub struct SessionManagerService<Inner, Store>
+where
+    Store: SessionStore,
+{
+    inner: Inner,
     config: SessionConfig,
-    store: Arc<Mutex<dyn SessionStore>>,
+    store: Arc<Mutex<Store>>,
 }
 
-impl<S> SessionManagerService<S> {
-    pub fn new(inner: S, config: SessionConfig, store: Arc<Mutex<dyn SessionStore>>) -> Self {
+impl<Inner, Store> SessionManagerService<Inner, Store>
+where
+    Store: SessionStore,
+{
+    pub fn new(inner: Inner, config: SessionConfig, store: Arc<Mutex<Store>>) -> Self {
         SessionManagerService {
             inner,
             config: config.into(),
@@ -59,17 +61,40 @@ impl<S> SessionManagerService<S> {
     }
 }
 
-impl<S, B, ResBody> Service<Request<B>> for SessionManagerService<S>
+// #[derive(Clone)] requires Store to be Clone, which shouldn't really be necessary because it's
+// in an Arc. The only way to get around this is to manually implement Clone.
+// See https://github.com/rust-lang/rust/issues/26925
+impl<Inner, Store> Clone for SessionManagerService<Inner, Store>
 where
-    S: Service<Request<B>, Response = Response<ResBody>, Error = Infallible>
+    Inner: Clone,
+    Store: SessionStore,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            config: self.config.clone(),
+            store: self.store.clone(),
+        }
+    }
+}
+
+impl<Inner, S, K, B, ResBody, Store> Service<Request<B>> for SessionManagerService<Inner, Store>
+where
+    Inner: Service<Request<B>, Response = Response<ResBody>, Error = Infallible>
         + Clone
         + Send
         + 'static,
-    S::Response: IntoResponse,
-    S::Future: Send,
+    Inner::Response: IntoResponse,
+    Inner::Future: Send,
     B: Send + 'static,
+    K: SessionKey + Display + 'static,
+    S: SessionData + Clone + 'static,
+    Store: SessionStore<Session = S, Key = K> + 'static,
 {
-    type Response = (Option<PrivateCookieJar>, Result<S::Response, StatusCode>);
+    type Response = (
+        Option<PrivateCookieJar>,
+        Result<Inner::Response, StatusCode>,
+    );
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -102,19 +127,24 @@ where
 
             let session = match cookie {
                 Some(c) => {
-                    let uuid = match Uuid::from_str(c.value()) {
-                        Err(e) => {
-                            error!("Invalid UUID in session cookie: {}", e);
+                    let session_key = match K::from_str(c.value()) {
+                        Err(_) => {
+                            error!("Invalid key in session cookie: {}", c.value());
                             return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
                         }
                         Ok(u) => u,
                     };
 
-                    // TODO: Refresh the session cookie with a new UUID
+                    debug!(
+                        "Existing session cookie found containing key {}",
+                        session_key
+                    );
 
-                    let session = match store.load_session(&uuid) {
+                    // TODO: Refresh the session cookie with a new key
+
+                    let session = match store.load_session(&session_key) {
                         None => {
-                            error!("Session with key {} not found", uuid);
+                            error!("Session with key {} not found", session_key);
                             return Ok((None, Err(StatusCode::FORBIDDEN)));
                         }
                         Some(s) => s,
@@ -123,14 +153,19 @@ where
                     Session(session)
                 }
                 None => {
-                    let session = AuthorSession::new();
-                    let uuid = store.store_session(&session);
+                    debug!("No session cookie found, creating new session");
 
-                    let cookie = Cookie::build(config.cookie_name.to_string(), uuid.to_string())
-                        .same_site(SameSite::Strict)
-                        .secure(true)
-                        .http_only(true)
-                        .finish();
+                    let session = S::new();
+                    let session_key = store.store_session(&session);
+
+                    trace!("Session created with key {}", session_key);
+
+                    let cookie =
+                        Cookie::build(config.cookie_name.to_string(), session_key.to_string())
+                            .same_site(SameSite::Strict)
+                            .secure(true)
+                            .http_only(true)
+                            .finish();
 
                     cookie_jar = cookie_jar.add(cookie);
 
@@ -147,22 +182,48 @@ where
     }
 }
 
-#[derive(Clone)]
-pub struct SessionManagerLayer {
+pub struct SessionManagerLayer<Store>
+where
+    Store: SessionStore,
+{
     config: SessionConfig,
-    store: Arc<Mutex<dyn SessionStore>>,
+    store: Arc<Mutex<Store>>,
 }
 
-impl SessionManagerLayer {
-    pub fn new(config: SessionConfig, store: Arc<Mutex<dyn SessionStore>>) -> Self {
-        SessionManagerLayer { config, store }
+// #[derive(Clone)] requires Store to be Clone, which shouldn't really be necessary because it's
+// in an Arc. The only way to get around this is to manually implement Clone.
+// See https://github.com/rust-lang/rust/issues/26925
+impl<Store> Clone for SessionManagerLayer<Store>
+where
+    Store: SessionStore,
+{
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            store: self.store.clone(),
+        }
     }
 }
 
-impl<S> Layer<S> for SessionManagerLayer {
-    type Service = SessionManagerService<S>;
+impl<Store> SessionManagerLayer<Store>
+where
+    Store: SessionStore,
+{
+    pub fn new(config: SessionConfig, store: Store) -> Self {
+        SessionManagerLayer {
+            config,
+            store: Arc::new(Mutex::new(store)),
+        }
+    }
+}
 
-    fn layer(&self, inner: S) -> Self::Service {
+impl<Inner, Store> Layer<Inner> for SessionManagerLayer<Store>
+where
+    Store: SessionStore,
+{
+    type Service = SessionManagerService<Inner, Store>;
+
+    fn layer(&self, inner: Inner) -> Self::Service {
         SessionManagerService::new(inner, self.config.clone(), self.store.clone())
     }
 }

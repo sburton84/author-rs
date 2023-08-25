@@ -15,7 +15,8 @@ homepage = "https://github.com/sburton84/author-rs"
 anyhow = "1"
 axum = { version = "0.6", features = ["macros"] }
 author-axum = { path = "../../author-axum" }
-parking_lot = "0.12"
+author-web = { path = "../../author-web" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
+uuid = "1.4"

@@ -1,15 +1,38 @@
 use cookie::Key;
+use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 
 pub mod store;
 
-#[derive(Clone)]
-pub struct Session {}
+pub trait SessionData: Send + Sync {
+    fn new() -> Self;
+}
 
-impl Session {
+#[derive(Clone)]
+pub struct InMemorySession {
+    values: HashMap<String, String>,
+}
+
+impl InMemorySession {
     pub fn new() -> Self {
-        Session {}
+        InMemorySession {
+            values: HashMap::new(),
+        }
+    }
+
+    pub fn set_value(&mut self, key: &str, val: &str) {
+        self.values.insert(key.to_string(), val.to_string());
+    }
+
+    pub fn get_value(&self, key: &str) -> Option<String> {
+        self.values.get(key).cloned()
+    }
+}
+
+impl SessionData for InMemorySession {
+    fn new() -> Self {
+        InMemorySession::new()
     }
 }
 
