@@ -1,5 +1,5 @@
 use crate::session::store::SessionStore;
-use crate::session::{SessionData, SessionDataValues, SessionKey};
+use crate::session::{SessionData, SessionDataValueStorage, SessionKey};
 use parking_lot::Mutex;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -72,7 +72,7 @@ impl SessionKey for Uuid {
     }
 }
 
-impl<K, V> SessionDataValues<K, V> for InMemorySessionData<K, V>
+impl<K, V> SessionDataValueStorage<K, V> for InMemorySessionData<K, V>
 where
     K: Hash + Eq,
     V: Clone,

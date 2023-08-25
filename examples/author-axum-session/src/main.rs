@@ -2,7 +2,7 @@ use author_axum::{Session, SessionManagerLayer};
 use author_web::session::store::in_memory::{
     InMemorySession, InMemorySessionData, InMemorySessionStore,
 };
-use author_web::session::SessionDataValues;
+use author_web::session::SessionDataValueStorage;
 use author_web::SessionConfig;
 use axum::debug_handler;
 use axum::routing::get;

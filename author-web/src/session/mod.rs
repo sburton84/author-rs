@@ -27,7 +27,7 @@ where
     }
 }
 
-pub trait SessionDataValues<K, V>
+pub trait SessionDataValueStorage<K, V>
 where
     K: Hash + Eq,
 {
@@ -38,10 +38,10 @@ where
         K: Borrow<KRef> + Hash + Eq;
 }
 
-impl<K, V, T> SessionDataValues<K, V> for Arc<Mutex<T>>
+impl<K, V, T> SessionDataValueStorage<K, V> for Arc<Mutex<T>>
 where
     K: Hash + Eq,
-    T: SessionDataValues<K, V>,
+    T: SessionDataValueStorage<K, V>,
 {
     fn set_value(&mut self, key: K, val: V) {
         self.lock().set_value(key, val)
