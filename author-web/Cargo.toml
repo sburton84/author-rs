@@ -10,6 +10,8 @@ readme = "README.md"
 homepage = "https://github.com/sburton84/author-rs"
 
 [features]
+default = ["in-memory"]
+in-memory = ["uuid"]
 
 [dependencies]
 anyhow = "1"
@@ -18,4 +20,4 @@ cookie = "0.17"
 parking_lot = "0.12"
 rand = "0.8"
 thiserror = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4"], optional = true }

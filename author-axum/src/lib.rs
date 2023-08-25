@@ -1,5 +1,7 @@
-use author_web::store::{SessionKey, SessionStore};
-use author_web::{InMemorySession, SessionConfig, SessionData, SessionError};
+use author_web::session::store::in_memory::InMemorySession;
+use author_web::session::store::SessionStore;
+use author_web::session::{SessionData, SessionKey};
+use author_web::{SessionConfig, SessionError};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
