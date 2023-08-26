@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 pub enum Error {
     Forbidden,
 }
@@ -15,11 +17,11 @@ pub trait Object {
 pub trait Subject {
     type Role: Eq;
 
-    fn roles<'a>(&'a self) -> &'a [Self::Role];
+    fn roles(&self) -> HashSet<Self::Role>;
 }
 
 pub trait Policy<Res, Subj, Act> {
-    fn authorise(resource: &Res, subject: &Subj, action: &Act) -> Result<(), Error>;
+    fn authorise(&self, resource: &Res, subject: &Subj, action: &Act) -> Result<(), Error>;
 }
 
 pub struct RbacPolicy<Res, Subj, Act>
@@ -27,7 +29,7 @@ where
     Res: Object,
     Subj: Subject,
 {
-    allowed: Vec<(Res::Identifier, Vec<Subj::Role>, Act)>,
+    allowed: HashMap<(Res::Identifier, Act), HashSet<Subj::Role>>,
 }
 
 impl<Res, Subj, Act> RbacPolicy<Res, Subj, Act>
@@ -37,7 +39,7 @@ where
 {
     pub fn new() -> Self {
         RbacPolicy {
-            allowed: Vec::new(),
+            allowed: HashMap::new(),
         }
     }
 }
@@ -49,7 +51,14 @@ where
     Subj: Subject,
     <Subj as Subject>::Role: Eq,
 {
-    fn authorise(resource: &Res, subject: &Subj, action: &Act) -> Result<(), Error> {
+    fn authorise(&self, resource: &Res, subject: &Subj, action: &Act) -> Result<(), Error> {
+        let resource_id = resource.identifier();
+        let subject_roles = subject.roles();
+
+        // let allowed_roles = self.allowed.get((resource_id, action));
+        //
+        // if allowed_roles.intersection(subject_roles).length() >= 1 {}
+
         todo!()
     }
 }

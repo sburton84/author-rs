@@ -31,7 +31,10 @@ pub trait SessionDataValueStorage<K, V>
 where
     K: Hash + Eq,
 {
-    fn set_value(&mut self, key: K, val: V);
+    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
+    where
+        KVal: Into<K>,
+        VVal: Into<V>;
     fn get_value<KRef>(&self, key: &KRef) -> Option<V>
     where
         KRef: Hash + Eq + ?Sized,
@@ -43,7 +46,11 @@ where
     K: Hash + Eq,
     T: SessionDataValueStorage<K, V>,
 {
-    fn set_value(&mut self, key: K, val: V) {
+    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
+    where
+        KVal: Into<K>,
+        VVal: Into<V>,
+    {
         self.lock().set_value(key, val)
     }
 

@@ -77,8 +77,12 @@ where
     K: Hash + Eq,
     V: Clone,
 {
-    fn set_value(&mut self, key: K, val: V) {
-        self.values.insert(key, val);
+    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
+    where
+        KVal: Into<K>,
+        VVal: Into<V>,
+    {
+        self.values.insert(key.into(), val.into());
     }
 
     fn get_value<KRef>(&self, key: &KRef) -> Option<V>
