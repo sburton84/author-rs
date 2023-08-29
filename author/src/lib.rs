@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 pub enum Error {
     Forbidden,
@@ -47,19 +48,31 @@ where
 impl<Res, Subj, Act> Policy<Res, Subj, Act> for RbacPolicy<Res, Subj, Act>
 where
     Res: Object,
-    <Res as Object>::Identifier: Eq,
+    <Res as Object>::Identifier: Hash + Eq,
     Subj: Subject,
-    <Subj as Subject>::Role: Eq,
+    <Subj as Subject>::Role: Hash + Eq,
+    Act: Hash + Eq,
 {
     fn authorise(&self, resource: &Res, subject: &Subj, action: &Act) -> Result<(), Error> {
         let resource_id = resource.identifier();
         let subject_roles = subject.roles();
 
-        // let allowed_roles = self.allowed.get((resource_id, action));
-        //
-        // if allowed_roles.intersection(subject_roles).length() >= 1 {}
+        let allowed_roles = self.allowed.get(&(resource_id, action));
 
-        todo!()
+        let allowed_roles = match allowed_roles {
+            Some(a) => a,
+            None => {
+                return Err(Error::Forbidden);
+            }
+        };
+
+        let matching_roles: HashSet<_> = allowed_roles.intersection(&subject_roles).collect();
+
+        if matching_roles.len() == 0 {
+            return Err(Error::Forbidden);
+        }
+
+        Ok(())
     }
 }
 
