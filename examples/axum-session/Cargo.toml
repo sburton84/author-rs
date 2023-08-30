@@ -1,5 +1,5 @@
 [package]
-name = "author-axum-example"
+name = "author-axum-session-example"
 version = "0.1.0"
 description = "Demonstrates Author session handling in Axum"
 authors = ["Sean Burton <seanjburton@gmail.com>"]

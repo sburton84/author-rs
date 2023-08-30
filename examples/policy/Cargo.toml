@@ -1,7 +1,7 @@
 [package]
-name = "author"
+name = "author-policy-example"
 version = "0.1.0"
-description = "Auth[entic|oris]ation"
+description = "Demonstrates Author policies"
 authors = ["Sean Burton <seanjburton@gmail.com>"]
 repository = "https://github.com/sburton84/author-rs"
 license = "MIT"
@@ -12,4 +12,6 @@ homepage = "https://github.com/sburton84/author-rs"
 [features]
 
 [dependencies]
-thiserror = "1"
+anyhow = "1"
+assert_matches = "1"
+author = { path = "../../author" }
