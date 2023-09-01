@@ -1,5 +1,5 @@
 use assert_matches::assert_matches;
-use author::rbac::{GlobalRbacPolicy, GlobalRbacSubject, RbacResource, RbacResourceWithRole};
+use author::rbac::{GlobalRbacPolicy, GlobalRbacSubject, RbacResource};
 use author::{Policy, Resource, Subject};
 use std::collections::HashSet;
 

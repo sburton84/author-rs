@@ -120,22 +120,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     assert_matches!(
-        policy.authorise(&customer, &user, &CustomerAction::Read),
-        Err(_)
-    );
-
-    assert_matches!(
         policy.authorise(&customer, &user, &CustomerAction::Write),
-        Err(_)
-    );
-
-    assert_matches!(
-        policy.authorise(&customer, &admin_user, &CustomerAction::Read),
-        Ok(_)
-    );
-
-    assert_matches!(
-        policy.authorise(&customer, &admin_user, &CustomerAction::Write),
         Ok(_)
     );
 

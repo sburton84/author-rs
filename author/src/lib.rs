@@ -14,11 +14,11 @@ pub struct ProtectedResource<R> {
     resource: R,
 }
 
-pub trait Object {
-    type Identifier: Hash + Eq;
-
-    fn identifier(&self) -> Self::Identifier;
-}
+// pub trait Object {
+//     type Identifier: Hash + Eq;
+//
+//     fn identifier(&self) -> Self::Identifier;
+// }
 
 pub trait Resource {
     type Action: Hash + Eq;

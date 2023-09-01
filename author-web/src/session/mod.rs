@@ -1,10 +1,42 @@
+use cookie::Key;
 use parking_lot::Mutex;
-use std::borrow::Borrow;
-use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
+use thiserror::Error;
 
 pub mod store;
+
+#[derive(Debug, Error)]
+pub enum SessionError {
+    #[error("Session with given ID not found")]
+    SessionNotFound,
+    #[error("Unexpected session error: {0}")]
+    UnexpectedError(#[from] anyhow::Error),
+}
+
+#[derive(Clone)]
+pub struct SessionConfig {
+    pub cookie_name: Arc<str>,
+    pub key: Key,
+}
+
+impl SessionConfig {
+    pub fn new(cookie_name: impl AsRef<str>, key: Key) -> Self {
+        SessionConfig {
+            cookie_name: cookie_name.as_ref().into(),
+            key,
+        }
+    }
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        SessionConfig {
+            cookie_name: "author_session_cookie".into(),
+            key: Key::generate(),
+        }
+    }
+}
 
 pub trait SessionKey: FromStr {
     fn generate() -> Self;
@@ -24,41 +56,5 @@ where
 {
     fn new() -> Self {
         Arc::new(Mutex::new(S::new()))
-    }
-}
-
-pub trait SessionDataValueStorage<K, V>
-where
-    K: Hash + Eq,
-{
-    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
-    where
-        KVal: Into<K>,
-        VVal: Into<V>;
-    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
-    where
-        KRef: Hash + Eq + ?Sized,
-        K: Borrow<KRef> + Hash + Eq;
-}
-
-impl<K, V, T> SessionDataValueStorage<K, V> for Arc<Mutex<T>>
-where
-    K: Hash + Eq,
-    T: SessionDataValueStorage<K, V>,
-{
-    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
-    where
-        KVal: Into<K>,
-        VVal: Into<V>,
-    {
-        self.lock().set_value(key, val)
-    }
-
-    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
-    where
-        KRef: Hash + Eq + ?Sized,
-        K: Borrow<KRef> + Hash + Eq,
-    {
-        self.lock().get_value(key)
     }
 }

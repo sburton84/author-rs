@@ -1,25 +1,63 @@
-use author_axum::{Session, SessionManagerLayer};
 use author_web::session::store::in_memory::{
     InMemorySession, InMemorySessionData, InMemorySessionStore,
 };
-use author_web::session::SessionDataValueStorage;
-use author_web::SessionConfig;
+use author_web::session::{SessionConfig, SessionData};
+
+use crate::schema::{auth_session, auth_user};
+use author_axum::session::{Session, SessionManagerLayer};
+use author_axum::user::User;
+use author_web::session::store::SessionDataValueStorage;
+use author_web::user::UserSession;
 use axum::debug_handler;
+use axum::extract::Path;
 use axum::routing::get;
 use axum::Router;
+use sea_orm::sea_query::Table;
+use sea_orm::{ConnectionTrait, Database, DbBackend, DbConn, DbErr, Schema};
 use std::net::{Ipv4Addr, SocketAddr};
 use tracing::debug;
-use uuid::Uuid;
+
+mod schema;
+
+enum Roles {
+    User,
+    Admin,
+}
+
+// struct ExampleSession {
+//
+// }
+//
+// async fn setup_schema(db: &DbConn) -> Result<(), DbErr> {
+//     let schema = Schema::new(DbBackend::Sqlite);
+//
+//     // Derive from Entity
+//     let stmt = schema.create_table_from_entity(auth_session::Entity);
+//
+//     // Execute create table statement
+//     db.execute(db.get_database_backend().build(&stmt)).await?;
+//
+//     // Derive from Entity
+//     let stmt = schema.create_table_from_entity(auth_user::Entity);
+//
+//     // Execute create table statement
+//     db.execute(db.get_database_backend().build(&stmt)).await?;
+//
+//     Ok(())
+// }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialise tracing
     tracing_subscriber::fmt::init();
 
+    // let db: DbConn = Database::connect("sqlite::memory:").await?;
+    // setup_schema(&db)?;
+
     // Create the session config
     let session_config = SessionConfig::default();
 
-    let session_store = InMemorySessionStore::<InMemorySessionData, Uuid>::new();
+    let string_session_store = InMemorySessionStore::<InMemorySessionData>::new();
 
     // Build our application
     let app = Router::new().route("/", get(no_session_handler));
@@ -28,8 +66,15 @@ async fn main() -> anyhow::Result<()> {
     let app = app.nest(
         "/admin",
         Router::new()
-            .route("/", get(session_handler))
-            .layer(SessionManagerLayer::new(session_config, session_store)),
+            // .route("/role", get(role_handler))
+            // .layer(RoleGuardLayer)
+            .route("/session", get(session_handler))
+            .route("/user", get(user_handler))
+            .route("/set_user/:name", get(set_user_handler))
+            .layer(SessionManagerLayer::new(
+                session_config.clone(),
+                string_session_store,
+            )),
     );
 
     // Run our app
@@ -56,6 +101,30 @@ async fn session_handler(Session(mut session): Session<InMemorySession>) -> Stri
 
     format!("Session found with value: {:?}", value)
 }
+
+#[debug_handler]
+async fn user_handler(User(user, _): User<String, InMemorySession>) -> String {
+    format!("Logged in as user with name: {:?}", user)
+}
+
+#[debug_handler]
+async fn set_user_handler(
+    Session(mut session): Session<InMemorySession>,
+    Path(name): Path<String>,
+) -> String {
+    session.set_user(&name);
+
+    format!("User set to: {:?}", name)
+}
+
+// #[debug_handler]
+// async fn role_handler() -> String {}
+
+// #[debug_handler]
+// async fn make_me_admin(Session(mut session): Session<InMemorySession>) -> String {}
+//
+// #[debug_handler]
+// async fn user_with_role_handler(user: UserWithRole<Role>) -> String {}
 
 // #[Protect(Resource, Read)]
 // async fn protected_handler() -> String {

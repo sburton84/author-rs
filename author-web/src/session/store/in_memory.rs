@@ -1,5 +1,5 @@
-use crate::session::store::SessionStore;
-use crate::session::{SessionData, SessionDataValueStorage, SessionKey};
+use crate::session::store::{SessionDataValueStorage, SessionStore};
+use crate::session::{SessionData, SessionKey};
 use parking_lot::Mutex;
 use std::borrow::Borrow;
 use std::collections::HashMap;

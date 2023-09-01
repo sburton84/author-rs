@@ -1,10 +1,19 @@
-use crate::{Error, Object, Policy, Resource, Subject};
-use std::any::{Any, TypeId};
-use std::collections::{HashMap, HashSet};
+use crate::{Error, Policy, Resource, Subject};
+use std::any::Any;
+use std::collections::HashSet;
 use std::hash::Hash;
 use std::iter::Extend;
 
 pub mod config;
+
+// pub struct Permission<Act, Res> {
+//     action: Act,
+//     resource: Res,
+// }
+//
+// pub struct Role {
+//     permissions: Vec<Permission>,
+// }
 
 pub trait GlobalRbacSubject: Subject {
     type GlobalRole: Hash + Eq;
@@ -64,15 +73,9 @@ where
 
 // pub struct ResourceRbacPolicy<Res, Role, Act>
 // where
-//     Res: Resource + Object,
-// {
-//     pub(crate) config: RbacResourcePolicyConfig<Res::Identifier, Role, Act>,
-// }
+//     Res: Resource, {}
 //
-// pub struct RbacPolicyConfig<ResourceIdentifier, Role, Act> {
-//     pub(crate) global_allowed: GlobalRbacPolicyConfig<Role, Act>,
-//     pub(crate) allowed: HashMap<TypeId, RbacResourcePolicyConfig<ResourceIdentifier, Role, Act>>,
-// }
+// impl<Res, Subj, Act> Policy<Res, Subj> for ResourceRbacPolicy<Res, Subj, Act> {}
 
 // pub struct RbacPolicy<Res, Subj, Act>
 // where
