@@ -31,6 +31,7 @@ where
 
         let user = session
             .current_user()
+            .await
             .ok_or((StatusCode::FORBIDDEN, "Forbidden"))?;
 
         Ok(User(user, PhantomData::default()))

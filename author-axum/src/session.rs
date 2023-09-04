@@ -21,7 +21,7 @@ use tower_util::ServiceExt;
 use tracing::{debug, error, trace};
 
 #[derive(Clone)]
-pub struct Session<T: Clone = InMemorySessionData>(pub T);
+pub struct Session<T: Clone = Arc<InMemorySessionData>>(pub T);
 
 #[async_trait]
 impl<S, T> FromRequestParts<S> for Session<T>
@@ -46,14 +46,14 @@ where
 {
     inner: Inner,
     config: SessionConfig,
-    store: Arc<Mutex<Store>>,
+    store: Arc<Store>,
 }
 
 impl<Inner, Store> SessionManagerService<Inner, Store>
 where
     Store: SessionStore,
 {
-    pub fn new(inner: Inner, config: SessionConfig, store: Arc<Mutex<Store>>) -> Self {
+    pub fn new(inner: Inner, config: SessionConfig, store: Arc<Store>) -> Self {
         SessionManagerService {
             inner,
             config: config.into(),
@@ -88,9 +88,9 @@ where
     Inner::Response: IntoResponse,
     Inner::Future: Send,
     B: Send + 'static,
-    K: SessionKey + Display + 'static,
+    K: SessionKey + Display + Send + Sync + 'static,
     S: SessionData + Clone + 'static,
-    Store: SessionStore<Session = S, Key = K> + 'static,
+    Store: SessionStore<Session = S, Key = K> + Send + Sync + 'static,
 {
     type Response = (
         Option<PrivateCookieJar>,
@@ -143,7 +143,7 @@ where
 
                     // TODO: Refresh the session cookie with a new key
 
-                    let session = match store.load_session(&session_key) {
+                    let session = match store.load_session(&session_key).await {
                         None => {
                             error!("Session with key {} not found", session_key);
                             return Ok((None, Err(StatusCode::FORBIDDEN)));
@@ -156,7 +156,7 @@ where
                 None => {
                     debug!("No session cookie found, creating new session");
 
-                    let (session_key, session) = store.create_session();
+                    let (session_key, session) = store.create_session().await;
 
                     trace!("Session created with key {}", session_key);
 
@@ -191,7 +191,7 @@ where
     Store: SessionStore,
 {
     config: SessionConfig,
-    store: Arc<Mutex<Store>>,
+    store: Arc<Store>,
 }
 
 // #[derive(Clone)] requires Store to be Clone, which shouldn't really be necessary because it's
@@ -216,7 +216,7 @@ where
     pub fn new(config: SessionConfig, store: Store) -> Self {
         SessionManagerLayer {
             config,
-            store: Arc::new(Mutex::new(store)),
+            store: Arc::new(store),
         }
     }
 }

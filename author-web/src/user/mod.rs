@@ -1,36 +1,40 @@
 use crate::session::store::in_memory::InMemorySessionData;
 use crate::session::store::SessionDataValueStorage;
-use parking_lot::Mutex;
+use async_trait::async_trait;
 use std::sync::Arc;
 
+#[async_trait]
 pub trait UserSession<U> {
-    fn set_user(&mut self, user: &U);
-    fn current_user(&self) -> Option<U>;
+    async fn set_user(&self, user: U);
+    async fn current_user(&self) -> Option<U>;
 }
 
 #[cfg(feature = "in-memory")]
+#[async_trait]
 impl<U> UserSession<U> for InMemorySessionData<String, U>
 where
-    U: Clone,
+    U: Clone + Send,
 {
-    fn set_user(&mut self, user: &U) {
-        self.set_value("current_user", user.clone())
+    async fn set_user(&self, user: U) {
+        self.set_value("current_user", user).await
     }
 
-    fn current_user(&self) -> Option<U> {
-        self.get_value("current_user")
+    async fn current_user(&self) -> Option<U> {
+        self.get_value("current_user").await
     }
 }
 
-impl<U, Sess> UserSession<U> for Arc<Mutex<Sess>>
+#[async_trait]
+impl<U, Sess> UserSession<U> for Arc<Sess>
 where
-    Sess: UserSession<U>,
+    Sess: UserSession<U> + Send + Sync,
+    U: Clone + Send + 'static,
 {
-    fn set_user(&mut self, user: &U) {
-        self.lock().set_user(user)
+    async fn set_user(&self, user: U) {
+        self.set_user(user).await
     }
 
-    fn current_user(&self) -> Option<U> {
-        self.lock().current_user()
+    async fn current_user(&self) -> Option<U> {
+        self.current_user().await
     }
 }

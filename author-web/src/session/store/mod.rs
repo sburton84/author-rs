@@ -1,90 +1,96 @@
 use crate::session::{SessionData, SessionKey};
-use parking_lot::Mutex;
+use async_trait::async_trait;
 use std::borrow::Borrow;
 use std::hash::Hash;
-use std::sync::Arc;
 
 #[cfg(feature = "in-memory")]
 pub mod in_memory;
 
+#[async_trait]
 pub trait SessionStore: Send {
     type Session: SessionData;
     type Key: SessionKey;
 
-    fn create_session(&mut self) -> (Self::Key, Self::Session);
-    fn load_session(&self, key: &Self::Key) -> Option<Self::Session>;
+    async fn create_session(&self) -> (Self::Key, Self::Session);
+    async fn load_session(&self, key: &Self::Key) -> Option<Self::Session>;
 }
 
-impl<S, K> SessionStore for Arc<Mutex<dyn SessionStore<Session = S, Key = K>>>
-where
-    S: SessionData,
-    K: SessionKey,
-{
-    type Session = S;
-    type Key = K;
+// #[async_trait]
+// impl<S, K> SessionStore for Arc<Mutex<dyn SessionStore<Session = S, Key = K>>>
+// where
+//     S: SessionData,
+//     K: SessionKey + Sync,
+// {
+//     type Session = S;
+//     type Key = K;
+//
+//     async fn create_session(&mut self) -> (Self::Key, Self::Session) {
+//         self.lock().await.create_session().await
+//     }
+//
+//     async fn load_session(&self, key: &K) -> Option<S> {
+//         let option = self.lock().await.load_session(key);
+//         option.await
+//     }
+// }
+//
+// #[async_trait]
+// impl<S, K, Store> SessionStore for Arc<Mutex<Store>>
+// where
+//     Store: SessionStore<Session = S, Key = K>,
+//     S: SessionData,
+//     K: SessionKey + Sync,
+// {
+//     type Session = S;
+//     type Key = K;
+//
+//     async fn create_session(&mut self) -> (Self::Key, Self::Session) {
+//         self.lock().await.create_session().await
+//     }
+//
+//     async fn load_session(&self, key: &K) -> Option<S> {
+//         self.lock().await.load_session(key).await
+//     }
+// }
 
-    fn create_session(&mut self) -> (Self::Key, Self::Session) {
-        self.lock().create_session()
-    }
-
-    fn load_session(&self, key: &K) -> Option<S> {
-        self.lock().load_session(key)
-    }
-}
-
-impl<S, K, Store> SessionStore for Arc<Mutex<Store>>
-where
-    Store: SessionStore<Session = S, Key = K>,
-    S: SessionData,
-    K: SessionKey,
-{
-    type Session = S;
-    type Key = K;
-
-    fn create_session(&mut self) -> (Self::Key, Self::Session) {
-        self.lock().create_session()
-    }
-
-    fn load_session(&self, key: &K) -> Option<S> {
-        self.lock().load_session(key)
-    }
-}
-
+#[async_trait]
 pub trait SessionDataValueStorage<K, V>
 where
     K: Hash + Eq,
 {
-    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
+    async fn set_value<KVal, VVal>(&self, key: KVal, val: VVal)
     where
-        KVal: Into<K>,
-        VVal: Into<V>;
-    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+        KVal: Into<K> + Send,
+        VVal: Into<V> + Send;
+
+    async fn get_value<KRef>(&self, key: &KRef) -> Option<V>
     where
-        KRef: Hash + Eq + ?Sized,
+        KRef: Hash + Eq + ?Sized + Sync,
         K: Borrow<KRef> + Hash + Eq;
 }
 
-impl<K, V, T> SessionDataValueStorage<K, V> for Arc<Mutex<T>>
-where
-    K: Hash + Eq,
-    T: SessionDataValueStorage<K, V>,
-{
-    fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
-    where
-        KVal: Into<K>,
-        VVal: Into<V>,
-    {
-        self.lock().set_value(key, val)
-    }
-
-    fn get_value<KRef>(&self, key: &KRef) -> Option<V>
-    where
-        KRef: Hash + Eq + ?Sized,
-        K: Borrow<KRef> + Hash + Eq,
-    {
-        self.lock().get_value(key)
-    }
-}
+// #[async_trait]
+// impl<K, V, T> SessionDataValueStorage<K, V> for Arc<Mutex<T>>
+// where
+//     K: Hash + Eq,
+//     T: SessionDataValueStorage<K, V>,
+// {
+//     async fn set_value<KVal, VVal>(&mut self, key: KVal, val: VVal)
+//     where
+//         KVal: Into<K> + Send,
+//         VVal: Into<V> + Send,
+//     {
+//         self.lock().await.set_value(key, val).await
+//     }
+//
+//     async fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+//     where
+//         KRef: Hash + Eq + ?Sized + Sync,
+//         K: Borrow<KRef> + Hash + Eq,
+//     {
+//         self.lock().await.get_value(key).await
+//     }
+// }
 
 // pub struct SessionDataMultiStorage<S1, S2> {
 //     storage1: S1,

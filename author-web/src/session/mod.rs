@@ -1,5 +1,4 @@
 use cookie::Key;
-use parking_lot::Mutex;
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -50,11 +49,20 @@ pub trait SessionSubject<Subject> {
     fn subject() -> Subject;
 }
 
-impl<S> SessionData for Arc<Mutex<S>>
+impl<S> SessionData for Arc<S>
 where
     S: SessionData,
 {
     fn new() -> Self {
-        Arc::new(Mutex::new(S::new()))
+        Arc::new(S::new())
     }
 }
+
+// impl<S> SessionData for Arc<Mutex<S>>
+// where
+//     S: SessionData,
+// {
+//     fn new() -> Self {
+//         Arc::new(Mutex::new(S::new()))
+//     }
+// }

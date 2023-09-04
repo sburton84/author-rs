@@ -95,9 +95,11 @@ async fn no_session_handler() -> String {
 
 #[debug_handler]
 async fn session_handler(Session(mut session): Session<InMemorySession>) -> String {
-    let value = { session.get_value("test_key").clone() };
+    let value = { session.get_value("test_key").await.clone() };
 
-    session.set_value("test_key".to_string(), "test_value".to_string());
+    session
+        .set_value("test_key".to_string(), "test_value".to_string())
+        .await;
 
     format!("Session found with value: {:?}", value)
 }
@@ -112,7 +114,7 @@ async fn set_user_handler(
     Session(mut session): Session<InMemorySession>,
     Path(name): Path<String>,
 ) -> String {
-    session.set_user(&name);
+    session.set_user(name.clone()).await;
 
     format!("User set to: {:?}", name)
 }
