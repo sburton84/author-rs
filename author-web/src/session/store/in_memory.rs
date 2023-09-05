@@ -1,5 +1,5 @@
 use crate::session::store::{SessionDataValueStorage, SessionStore};
-use crate::session::{SessionData, SessionKey};
+use crate::session::SessionKey;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::borrow::Borrow;
@@ -23,23 +23,36 @@ impl<S, K> InMemorySessionStore<S, K> {
 #[async_trait]
 impl<S, K> SessionStore for InMemorySessionStore<S, K>
 where
-    S: SessionData,
+    S: CreateNew,
     K: SessionKey + Clone + Eq + Hash + Send + Sync,
 {
     type Session = Arc<S>;
     type Key = K;
 
-    async fn create_session(&self) -> (Self::Key, Self::Session) {
+    async fn create_session(&self) -> anyhow::Result<(Self::Key, Self::Session)> {
         let key = K::generate();
         let session = Arc::new(S::new());
 
         self.sessions.lock().insert(key.clone(), session.clone());
 
-        (key, session)
+        Ok((key, session))
     }
 
-    async fn load_session(&self, key: &K) -> Option<Self::Session> {
-        self.sessions.lock().get(key).cloned()
+    async fn load_session(&self, key: &K) -> anyhow::Result<Option<Self::Session>> {
+        Ok(self.sessions.lock().get(key).cloned())
+    }
+}
+
+pub trait CreateNew: Send + Sync {
+    fn new() -> Self;
+}
+
+impl<S> CreateNew for Arc<S>
+where
+    S: CreateNew,
+{
+    fn new() -> Self {
+        Arc::new(S::new())
     }
 }
 
@@ -57,7 +70,7 @@ impl<K, V> InMemorySessionData<K, V> {
     }
 }
 
-impl<K, V> SessionData for InMemorySessionData<K, V>
+impl<K, V> CreateNew for InMemorySessionData<K, V>
 where
     K: Send + Sync,
     V: Send + Sync,
@@ -76,22 +89,23 @@ impl SessionKey for Uuid {
 #[async_trait]
 impl<K, V> SessionDataValueStorage<K, V> for InMemorySessionData<K, V>
 where
-    K: Hash + Eq + Send,
+    K: Clone + Hash + Eq + Send,
     V: Clone + Send,
 {
-    async fn set_value<KVal, VVal>(&self, key: KVal, val: VVal)
+    async fn set_value<KVal, VVal>(&self, key: KVal, val: VVal) -> anyhow::Result<()>
     where
         KVal: Into<K> + Send,
         VVal: Into<V> + Send,
     {
         self.values.lock().insert(key.into(), val.into());
+        Ok(())
     }
 
-    async fn get_value<KRef>(&self, key: &KRef) -> Option<V>
+    async fn get_value<KRef>(&self, key: &KRef) -> anyhow::Result<Option<V>>
     where
         KRef: Hash + Eq + ?Sized + Sync,
         K: Borrow<KRef>,
     {
-        self.values.lock().get(key).cloned()
+        Ok(self.values.lock().get(key).cloned())
     }
 }

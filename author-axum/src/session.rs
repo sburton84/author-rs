@@ -1,6 +1,6 @@
 use author_web::session::store::in_memory::InMemorySessionData;
 use author_web::session::store::SessionStore;
-use author_web::session::{SessionConfig, SessionData, SessionError, SessionKey};
+use author_web::session::{SessionConfig, SessionError, SessionKey};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
@@ -9,7 +9,6 @@ use axum::{async_trait, RequestPartsExt};
 use axum_extra::extract::cookie::{Cookie, Key, SameSite};
 use axum_extra::extract::PrivateCookieJar;
 use futures::future::BoxFuture;
-use parking_lot::Mutex;
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -89,7 +88,7 @@ where
     Inner::Future: Send,
     B: Send + 'static,
     K: SessionKey + Display + Send + Sync + 'static,
-    S: SessionData + Clone + 'static,
+    S: Clone + Send + Sync + 'static,
     Store: SessionStore<Session = S, Key = K> + Send + Sync + 'static,
 {
     type Response = (
@@ -105,7 +104,7 @@ where
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
         let config = self.config.clone();
-        let mut store = self.store.clone();
+        let store = self.store.clone();
 
         let clone = self.inner.clone();
         let inner = std::mem::replace(&mut self.inner, clone);
@@ -144,11 +143,17 @@ where
                     // TODO: Refresh the session cookie with a new key
 
                     let session = match store.load_session(&session_key).await {
-                        None => {
-                            error!("Session with key {} not found", session_key);
-                            return Ok((None, Err(StatusCode::FORBIDDEN)));
+                        Err(e) => {
+                            error!("Failed to load session: {}", e);
+                            return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
                         }
-                        Some(s) => s,
+                        Ok(u) => match u {
+                            None => {
+                                error!("Session with key {} not found", session_key);
+                                return Ok((None, Err(StatusCode::FORBIDDEN)));
+                            }
+                            Some(s) => s,
+                        },
                     };
 
                     Session(session)
@@ -156,7 +161,13 @@ where
                 None => {
                     debug!("No session cookie found, creating new session");
 
-                    let (session_key, session) = store.create_session().await;
+                    let (session_key, session) = match store.create_session().await {
+                        Err(e) => {
+                            error!("Failed to create session: {}", e);
+                            return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
+                        }
+                        Ok(s) => s,
+                    };
 
                     trace!("Session created with key {}", session_key);
 

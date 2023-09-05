@@ -1,7 +1,7 @@
 use author_web::session::store::in_memory::{
     InMemorySession, InMemorySessionData, InMemorySessionStore,
 };
-use author_web::session::{SessionConfig, SessionData};
+use author_web::session::SessionConfig;
 
 use crate::schema::{auth_session, auth_user};
 use author_axum::session::{Session, SessionManagerLayer};
@@ -10,6 +10,7 @@ use author_web::session::store::SessionDataValueStorage;
 use author_web::user::UserSession;
 use axum::debug_handler;
 use axum::extract::Path;
+use axum::http::StatusCode;
 use axum::routing::get;
 use axum::Router;
 use sea_orm::sea_query::Table;
@@ -94,14 +95,23 @@ async fn no_session_handler() -> String {
 }
 
 #[debug_handler]
-async fn session_handler(Session(mut session): Session<InMemorySession>) -> String {
-    let value = { session.get_value("test_key").await.clone() };
+async fn session_handler(
+    Session(mut session): Session<InMemorySession>,
+) -> Result<String, (StatusCode, &'static str)> {
+    let value = {
+        session
+            .get_value("test_key")
+            .await
+            .map_err(|_| (StatusCode::FORBIDDEN, "Forbidden"))?
+            .clone()
+    };
 
     session
         .set_value("test_key".to_string(), "test_value".to_string())
-        .await;
+        .await
+        .map_err(|_| (StatusCode::FORBIDDEN, "Forbidden"))?;
 
-    format!("Session found with value: {:?}", value)
+    Ok(format!("Session found with value: {:?}", value))
 }
 
 #[debug_handler]
@@ -113,10 +123,13 @@ async fn user_handler(User(user, _): User<String, InMemorySession>) -> String {
 async fn set_user_handler(
     Session(mut session): Session<InMemorySession>,
     Path(name): Path<String>,
-) -> String {
-    session.set_user(name.clone()).await;
+) -> Result<String, (StatusCode, &'static str)> {
+    session
+        .set_user(name.clone())
+        .await
+        .map_err(|_| (StatusCode::FORBIDDEN, "Forbidden"))?;
 
-    format!("User set to: {:?}", name)
+    Ok(format!("User set to: {:?}", name))
 }
 
 // #[debug_handler]

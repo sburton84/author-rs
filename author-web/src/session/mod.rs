@@ -41,28 +41,6 @@ pub trait SessionKey: FromStr {
     fn generate() -> Self;
 }
 
-pub trait SessionData: Send + Sync {
-    fn new() -> Self;
-}
-
 pub trait SessionSubject<Subject> {
     fn subject() -> Subject;
 }
-
-impl<S> SessionData for Arc<S>
-where
-    S: SessionData,
-{
-    fn new() -> Self {
-        Arc::new(S::new())
-    }
-}
-
-// impl<S> SessionData for Arc<Mutex<S>>
-// where
-//     S: SessionData,
-// {
-//     fn new() -> Self {
-//         Arc::new(Mutex::new(S::new()))
-//     }
-// }

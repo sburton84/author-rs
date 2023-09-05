@@ -1,8 +1,6 @@
 use crate::{Error, Policy, Resource, Subject};
-use std::any::Any;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::iter::Extend;
 
 pub mod config;
 
