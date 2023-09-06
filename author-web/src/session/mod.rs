@@ -1,4 +1,4 @@
-use cookie::Key;
+use cookie::{Key, SameSite};
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
@@ -17,13 +17,15 @@ pub enum SessionError {
 pub struct SessionConfig {
     pub cookie_name: Arc<str>,
     pub key: Key,
+    pub same_site: SameSite,
 }
 
 impl SessionConfig {
-    pub fn new(cookie_name: impl AsRef<str>, key: Key) -> Self {
+    pub fn new(cookie_name: impl AsRef<str>, key: Key, same_site: SameSite) -> Self {
         SessionConfig {
             cookie_name: cookie_name.as_ref().into(),
             key,
+            same_site,
         }
     }
 }
@@ -33,6 +35,7 @@ impl Default for SessionConfig {
         SessionConfig {
             cookie_name: "author_session_cookie".into(),
             key: Key::generate(),
+            same_site: SameSite::Strict,
         }
     }
 }

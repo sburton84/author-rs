@@ -6,11 +6,12 @@ use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{async_trait, RequestPartsExt};
-use axum_extra::extract::cookie::{Cookie, Key, SameSite};
+use axum_extra::extract::cookie::{Cookie, Key};
 use axum_extra::extract::PrivateCookieJar;
 use futures::future::BoxFuture;
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use thiserror::Error;
@@ -88,6 +89,7 @@ where
     Inner::Future: Send,
     B: Send + 'static,
     K: SessionKey + Display + Send + Sync + 'static,
+    <K as FromStr>::Err: Send,
     S: Clone + Send + Sync + 'static,
     Store: SessionStore<Session = S, Key = K> + Send + Sync + 'static,
 {
@@ -125,41 +127,54 @@ where
 
             let cookie = cookie_jar.get(&config.cookie_name);
 
-            let session = match cookie {
+            // Check whether we have any existing session
+            let existing_session = match cookie {
                 Some(c) => {
-                    let session_key = match K::from_str(c.value()) {
+                    let session = match K::from_str(c.value()) {
                         Err(_) => {
-                            error!("Invalid key in session cookie: {}", c.value());
-                            return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
+                            error!("Error parsing key in session cookie: {}", c.value());
+                            None
                         }
-                        Ok(u) => u,
-                    };
+                        Ok(session_key) => {
+                            debug!(
+                                "Existing session cookie found containing key {}",
+                                session_key
+                            );
 
-                    debug!(
-                        "Existing session cookie found containing key {}",
-                        session_key
-                    );
+                            // TODO: Refresh the session cookie with a new key
 
-                    // TODO: Refresh the session cookie with a new key
-
-                    let session = match store.load_session(&session_key).await {
-                        Err(e) => {
-                            error!("Failed to load session: {}", e);
-                            return Ok((None, Err(StatusCode::INTERNAL_SERVER_ERROR)));
-                        }
-                        Ok(u) => match u {
-                            None => {
-                                error!("Session with key {} not found", session_key);
-                                return Ok((None, Err(StatusCode::FORBIDDEN)));
+                            match store.load_session(&session_key).await {
+                                Err(e) => {
+                                    error!("Failed to load session: {}", e);
+                                    None
+                                }
+                                Ok(u) => match u {
+                                    None => {
+                                        error!("Session with key {} not found", session_key);
+                                        None
+                                    }
+                                    Some(s) => Some(s),
+                                },
                             }
-                            Some(s) => s,
-                        },
+                        }
                     };
 
-                    Session(session)
+                    // If the session couldn't be loaded for any reason the cookie is probably no longer valid
+                    // if session.is_none() {
+                    //     // Remove the invalid cookie
+                    //     cookie_jar = cookie_jar.remove(c);
+                    // }
+
+                    session
                 }
+                None => None,
+            };
+
+            // If there's no usable existing session for any reason, create a new one
+            let session = match existing_session {
+                Some(s) => s,
                 None => {
-                    debug!("No session cookie found, creating new session");
+                    debug!("No existing session found, creating new session");
 
                     let (session_key, session) = match store.create_session().await {
                         Err(e) => {
@@ -173,20 +188,21 @@ where
 
                     let cookie =
                         Cookie::build(config.cookie_name.to_string(), session_key.to_string())
-                            .same_site(SameSite::Strict)
+                            .same_site(config.same_site)
                             .secure(true)
                             .http_only(true)
+                            .path("/")
                             .finish();
 
                     cookie_jar = cookie_jar.add(cookie);
 
-                    Session(session)
+                    session
                 }
             };
 
             trace!("Adding session to extensions");
 
-            parts.extensions.insert(session);
+            parts.extensions.insert(Session(session));
 
             trace!("Processing inner service");
 
