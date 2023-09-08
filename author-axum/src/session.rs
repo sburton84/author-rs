@@ -159,12 +159,6 @@ where
                         }
                     };
 
-                    // If the session couldn't be loaded for any reason the cookie is probably no longer valid
-                    // if session.is_none() {
-                    //     // Remove the invalid cookie
-                    //     cookie_jar = cookie_jar.remove(c);
-                    // }
-
                     session
                 }
                 None => None,
