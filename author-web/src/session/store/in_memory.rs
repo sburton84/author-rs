@@ -101,6 +101,14 @@ where
         Ok(())
     }
 
+    async fn unset_value<KVal>(&self, key: KVal) -> anyhow::Result<()>
+    where
+        KVal: Into<K> + Send,
+    {
+        self.values.lock().remove(&key.into());
+        Ok(())
+    }
+
     async fn get_value<KRef>(&self, key: &KRef) -> anyhow::Result<Option<V>>
     where
         KRef: Hash + Eq + ?Sized + Sync,

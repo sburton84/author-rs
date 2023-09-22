@@ -8,6 +8,7 @@ pub trait UserSession {
     type User;
 
     async fn set_user(&mut self, user: Self::User) -> anyhow::Result<()>;
+    async fn unset_user(&mut self) -> anyhow::Result<()>;
     async fn current_user(&self) -> anyhow::Result<Option<Self::User>>;
 }
 
@@ -23,6 +24,10 @@ where
         Ok(self.set_value("current_user", user).await?)
     }
 
+    async fn unset_user(&mut self) -> anyhow::Result<()> {
+        Ok(self.unset_value("current_user").await?)
+    }
+
     async fn current_user(&self) -> anyhow::Result<Option<Self::User>> {
         Ok(self.get_value("current_user").await?)
     }
@@ -35,11 +40,16 @@ where
     U: Clone + Send + 'static,
 {
     type User = U;
+
     async fn set_user(&mut self, user: U) -> anyhow::Result<()> {
-        Ok(self.set_user(user).await?)
+        Ok((*self).set_user(user).await?)
+    }
+
+    async fn unset_user(&mut self) -> anyhow::Result<()> {
+        Ok((*self).unset_user().await?)
     }
 
     async fn current_user(&self) -> anyhow::Result<Option<Self::User>> {
-        Ok(self.current_user().await?)
+        Ok((*self).current_user().await?)
     }
 }
