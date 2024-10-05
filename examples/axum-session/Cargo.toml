@@ -13,7 +13,7 @@ homepage = "https://github.com/sburton84/author-rs"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.6", features = ["macros"] }
+axum = { version = "0.7", features = ["macros"] }
 author-axum = { path = "../../author-axum" }
 author-web = { path = "../../author-web" }
 sea-orm = "0.12"

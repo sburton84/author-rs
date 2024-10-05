@@ -181,12 +181,12 @@ where
                     trace!("Session created with key {}", session_key);
 
                     let cookie =
-                        Cookie::build(config.cookie_name.to_string(), session_key.to_string())
+                        Cookie::build((config.cookie_name.to_string(), session_key.to_string()))
                             .same_site(config.same_site)
                             .secure(true)
                             .http_only(true)
                             .path("/")
-                            .finish();
+                            .build();
 
                     cookie_jar = cookie_jar.add(cookie);
 

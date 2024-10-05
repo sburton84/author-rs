@@ -13,13 +13,13 @@ homepage = "https://github.com/sburton84/author-rs"
 
 [dependencies]
 author-web = { path = "../author-web" }
-axum = "0.6"
-axum-extra = { version = "0.7", features = ["cookie-private"] }
+axum = "0.7"
+axum-extra = { version = "0.9", features = ["cookie-private"] }
 futures = "0.3"
 parking_lot = "0.12"
 thiserror = "1"
 tracing = "0.1"
-tower = "0.4"
+tower = "0.5"
 tower-layer = "0.3"
 tower-service = "0.3"
 tower-util = "0.3"
