@@ -25,6 +25,10 @@ where
         KVal: Into<K> + Send,
         VVal: Into<V> + Send;
 
+    async fn unset_value<KVal>(&self, key: KVal) -> anyhow::Result<()>
+    where
+        KVal: Into<K> + Send;
+
     async fn get_value<KRef>(&self, key: &KRef) -> anyhow::Result<Option<V>>
     where
         KRef: Hash + Eq + ?Sized + ToOwned<Owned = K> + Sync,
