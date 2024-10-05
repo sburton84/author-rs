@@ -13,9 +13,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly-2023-09-05
-        with:
-          components: clippy
       - name: Run clippy
         run: |
           cargo clippy --all-features -- -D warnings
@@ -24,4 +21,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly-2023-09-05
+      - name: Run build
+        run: |
+          cargo build --all-features

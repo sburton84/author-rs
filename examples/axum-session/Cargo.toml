@@ -16,7 +16,7 @@ anyhow = "1"
 axum = { version = "0.7", features = ["macros"] }
 author-axum = { path = "../../author-axum" }
 author-web = { path = "../../author-web" }
-sea-orm = "0.12"
+sea-orm = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
