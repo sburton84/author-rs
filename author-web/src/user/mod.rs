@@ -7,8 +7,8 @@ use std::sync::Arc;
 pub trait UserSession {
     type User;
 
-    async fn set_user(&mut self, user: Self::User) -> anyhow::Result<()>;
-    async fn unset_user(&mut self) -> anyhow::Result<()>;
+    async fn set_user(&self, user: Self::User) -> anyhow::Result<()>;
+    async fn unset_user(&self) -> anyhow::Result<()>;
     async fn current_user(&self) -> anyhow::Result<Option<Self::User>>;
 }
 
@@ -20,11 +20,11 @@ where
 {
     type User = U;
 
-    async fn set_user(&mut self, user: U) -> anyhow::Result<()> {
+    async fn set_user(&self, user: U) -> anyhow::Result<()> {
         Ok(self.set_value("current_user", user).await?)
     }
 
-    async fn unset_user(&mut self) -> anyhow::Result<()> {
+    async fn unset_user(&self) -> anyhow::Result<()> {
         Ok(self.unset_value("current_user").await?)
     }
 
@@ -41,15 +41,15 @@ where
 {
     type User = U;
 
-    async fn set_user(&mut self, user: U) -> anyhow::Result<()> {
-        Ok((*self).set_user(user).await?)
+    async fn set_user(&self, user: U) -> anyhow::Result<()> {
+        Ok((&*self as &Sess).set_user(user).await?)
     }
 
-    async fn unset_user(&mut self) -> anyhow::Result<()> {
-        Ok((*self).unset_user().await?)
+    async fn unset_user(&self) -> anyhow::Result<()> {
+        Ok((&*self as &Sess).unset_user().await?)
     }
 
     async fn current_user(&self) -> anyhow::Result<Option<Self::User>> {
-        Ok((*self).current_user().await?)
+        Ok((&*self as &Sess).current_user().await?)
     }
 }

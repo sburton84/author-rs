@@ -161,7 +161,10 @@ where
 
                     session
                 }
-                None => None,
+                None => {
+                    debug!("No existing session cookie found");
+                    None
+                }
             };
 
             // If there's no usable existing session for any reason, create a new one
