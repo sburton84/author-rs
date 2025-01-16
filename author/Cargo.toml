@@ -12,4 +12,4 @@ homepage = "https://github.com/sburton84/author-rs"
 [features]
 
 [dependencies]
-thiserror = "1"
+thiserror = "2"
