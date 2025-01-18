@@ -209,7 +209,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "author",
  "cookie",
  "parking_lot",
  "rand",
