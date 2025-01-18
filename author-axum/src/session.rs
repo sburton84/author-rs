@@ -186,7 +186,7 @@ where
                     let cookie =
                         Cookie::build((config.cookie_name.to_string(), session_key.to_string()))
                             .same_site(config.same_site)
-                            .secure(true)
+                            .secure(config.secure)
                             .http_only(true)
                             .path("/")
                             .build();
