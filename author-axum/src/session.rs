@@ -3,7 +3,7 @@ use author_web::session::store::SessionStore;
 use author_web::session::{SessionConfig, SessionError, SessionKey};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::http::{Request, StatusCode};
+use axum::http::{Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{async_trait, RequestPartsExt};
 use axum_extra::extract::cookie::{Cookie, Key};
@@ -113,6 +113,13 @@ where
 
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
+
+            if parts.method == Method::OPTIONS {
+                // If this is an OPTIONS requests then we don't expect to receive any cookies
+                // and the browser will discard any we return so there's no point proceeding
+                let response = inner.oneshot(Request::from_parts(parts, body)).await?;
+                return Ok((None, Ok(response)));
+            }
 
             let mut cookie_jar = match parts
                 .extract_with_state::<PrivateCookieJar, Key>(&config.key)
