@@ -1,6 +1,6 @@
 use crate::session::Session;
 use author_web::user::UserSession;
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRequestParts, OptionalFromRequestParts};
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use std::marker::PhantomData;
@@ -40,5 +40,39 @@ where
         trace!("Loaded user");
 
         Ok(User(user, PhantomData::default()))
+    }
+}
+
+impl<S, U, Sess> OptionalFromRequestParts<S> for User<U, Sess>
+where
+    S: Send + Sync,
+    Sess: UserSession<User = U> + Clone + Send + Sync + 'static,
+    U: Clone,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        trace!("Loading user for request");
+
+        if let Some(Session(session)) = parts.extensions.get::<Session<Sess>>() {
+            trace!("Loaded session");
+
+            if let Some(user) = session
+                .current_user()
+                .await
+                .map_err(|_| (StatusCode::FORBIDDEN, "Forbidden"))?
+            {
+                trace!("Loaded user");
+
+                Ok(Some(User(user, PhantomData::default())))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 }

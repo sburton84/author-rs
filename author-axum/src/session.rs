@@ -1,7 +1,7 @@
 use author_web::session::store::in_memory::InMemorySessionData;
 use author_web::session::store::SessionStore;
 use author_web::session::{SessionConfig, SessionError, SessionKey};
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRequestParts, OptionalFromRequestParts};
 use axum::http::request::Parts;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -36,6 +36,21 @@ where
             .get::<Session<T>>()
             .cloned()
             .ok_or((StatusCode::FORBIDDEN, "Forbidden"))
+    }
+}
+
+impl<S, T> OptionalFromRequestParts<S> for Session<T>
+where
+    S: Send + Sync,
+    T: Clone + Send + Sync + 'static,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(parts.extensions.get::<Session<T>>().cloned())
     }
 }
 
