@@ -5,7 +5,7 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::{async_trait, RequestPartsExt};
+use axum::RequestPartsExt;
 use axum_extra::extract::cookie::{Cookie, Key};
 use axum_extra::extract::PrivateCookieJar;
 use futures::future::BoxFuture;
@@ -23,7 +23,6 @@ use tracing::{debug, error, trace};
 #[derive(Clone)]
 pub struct Session<T: Clone = Arc<InMemorySessionData>>(pub T);
 
-#[async_trait]
 impl<S, T> FromRequestParts<S> for Session<T>
 where
     S: Send + Sync,

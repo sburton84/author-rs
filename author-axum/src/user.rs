@@ -1,6 +1,5 @@
 use crate::session::Session;
 use author_web::user::UserSession;
-use axum::async_trait;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
@@ -13,9 +12,9 @@ pub struct User<U: Clone, Sess>(pub U, pub PhantomData<Sess>);
 #[derive(Clone)]
 pub struct UserWithRole<U: Clone>(pub U);
 
-#[async_trait]
 impl<S, U, Sess> FromRequestParts<S> for User<U, Sess>
 where
+    S: Send + Sync,
     Sess: UserSession<User = U> + Clone + Send + Sync + 'static,
     U: Clone,
 {
